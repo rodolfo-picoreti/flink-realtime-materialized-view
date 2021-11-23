@@ -46,10 +46,10 @@ like postgres.postgres.`public.orders_agg`
 
 insert into orders_agg
   select 
-    customers.uidpk as uidpk,
-    customers.email as email,
+    customers.uidpk as customer_uid,
     sum(orders.total) as total
   from orders 
   left join customers on customers.uidpk = orders.customer_uid
-  where orders.status = 'completed'
-  group by customers.uidpk;
+  where orders.status = 'COMPLETED'
+  group by 
+    customers.uidpk;

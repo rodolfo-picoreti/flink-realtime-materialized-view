@@ -20,13 +20,13 @@ create table orders (
   constraint customer_fk foreign key(customer_uid) references customers(uidpk) on delete set null
 );
 
-select * from orders
-
 insert into orders (total, status, order_number, customer_uid) 
 values (100*random(), 'COMPLETED', (100000*random())::integer, 2)
 
+select * from orders
+
 create table orders_agg (
   customer_uid integer,
-  email varchar(255) unique not null,
-  total decimal(19,2) default null
+  total decimal(19,2) default null,
+  primary key(customer_uid)
 );
