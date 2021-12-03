@@ -7,11 +7,6 @@ create table customers (
 
 alter table customers replica identity full;
 
-insert into customers (email) values('hodor@'||random());
-insert into customers (email) values('hodor@'||random());
-
-select * from customers
-
 create table orders (
   uidpk serial,
   created_date varchar(20) default to_char(current_timestamp,'YYYY-MM-DD HH:MI:SS'),
@@ -24,19 +19,3 @@ create table orders (
 );
 
 alter table orders replica identity full;
-
-insert into orders (total, status, order_number, customer_uid) 
-values (100*random(), 'COMPLETED', (100000*random())::integer, 1);
-
-insert into orders (total, status, order_number, customer_uid) 
-values (100*random(), 'COMPLETED', (100000*random())::integer, 2);
-
-select * from orders;
-
-create table orders_agg (
-  customer_uid integer,
-  total decimal(19,2) default null,
-  primary key(customer_uid)
-);
-
-select * from orders_agg;

@@ -1,4 +1,3 @@
--- create schema catalog
 
 create catalog postgres with (
   'type'='jdbc',
@@ -8,8 +7,6 @@ create catalog postgres with (
   'username'='postgres',
   'password'='postgres'
 );
-
--- replicated tables to flink but via kafka
 
 create table orders with (
   'connector' = 'kafka',
@@ -31,25 +28,25 @@ create table customers with (
  )
 like postgres.postgres.`public.customers` (excluding options);
 
--- test queries
+create table orders_agg_index (
+  customer_uid integer primary key not enforced,
+  email string,
+  total decimal(38,2)
+) with (
+  'connector' = 'elasticsearch-7',
+  'hosts' = 'http://elasticsearch:9200',
+  'index' = 'orders_agg'
+);
 
-select * from orders 
-left join customers on customers.uidpk = orders.customer_uid;
-
--- create table directly on DB
-
-create table orders_agg
-like postgres.postgres.`public.orders_agg` 
-(including options);
-
--- insert back into DB
-
-insert into orders_agg
+insert into orders_agg_index
   select 
-    customers.uidpk as customer_uid,
+    orders.customer_uid as customer_uid,
+    customers.email as email,
     sum(orders.total) as total
   from orders 
   left join customers on customers.uidpk = orders.customer_uid
   where orders.status = 'COMPLETED'
   group by 
-    customers.uidpk;
+    orders.customer_uid,
+    customers.email;
+

@@ -36,25 +36,25 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      # KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:29092
       CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
       CONFLUENT_METRICS_ENABLE: 'true'
       CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
 
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.0.0
-    restart: always
-    hostname: schema-registry
-    container_name: schema-registry
-    depends_on:
-      - broker
-    ports:
-      - "8081:8081"
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+  # schema-registry:
+  #   image: confluentinc/cp-schema-registry:7.0.0
+  #   restart: always
+  #   hostname: schema-registry
+  #   container_name: schema-registry
+  #   depends_on:
+  #     - broker
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     SCHEMA_REGISTRY_HOST_NAME: schema-registry
+  #     SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+  #     SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
 
   connect:
     image: debezium/connect:1.7
@@ -63,7 +63,7 @@ services:
     container_name: connect
     depends_on:
       - broker
-      - schema-registry
+      # - schema-registry
     ports:
       - "8083:8083"
     environment:
@@ -79,8 +79,8 @@ services:
     container_name: control-center
     depends_on:
       - broker
-      - schema-registry
       - connect
+      # - schema-registry
       # - ksqldb-server
     ports:
       - "9021:9021"
@@ -89,7 +89,7 @@ services:
       CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER: 'connect:8083'
       # CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server:8088"
       # CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://localhost:8088"
-      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      # CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
       CONTROL_CENTER_REPLICATION_FACTOR: 1
       CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
@@ -97,25 +97,27 @@ services:
       PORT: 9021
 
   jobmanager:
-    image: flink:1.13.2-scala_2.12
+    image: flink:1.13.3-scala_2.12
     restart: always
     ports:
       - "8080:8081"
     command: jobmanager
+    volumes:
+      - ./checkpoints:/checkpoints
     environment:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
 
   taskmanager:
-    image: flink:1.13.2-scala_2.12
+    image: flink:1.13.3-scala_2.12
     restart: always
     depends_on:
       - jobmanager
     command: taskmanager
     scale: 1
     volumes:
-      - /host/path/to/job/artifacts:/opt/flink/usrlib
+      - ./checkpoints:/checkpoints
     environment:
       - |
         FLINK_PROPERTIES=
@@ -123,6 +125,7 @@ services:
         taskmanager.numberOfTaskSlots: 2
         parallelism.default: 2
 
+  # docker-compose exec sql-client bash -c '${FLINK_HOME}/bin/sql-client.sh embedded -d ${FLINK_HOME}/conf/sql-client-conf.yaml -l ${SQL_CLIENT_HOME}/lib -f /flink.sql'
   sql-client:
     build: ./flink-sql-client
     restart: always
@@ -130,10 +133,21 @@ services:
       - broker
       - jobmanager
       - zookeeper
-    environment:
-      FLINK_JOBMANAGER_HOST: jobmanager
-      ZOOKEEPER_CONNECT: zookeeper
-      KAFKA_BOOTSTRAP: broker
+    volumes:
+      - ./flink-sql-client/conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+      - ./flink-sql-client/conf/sql-client-conf.yaml:/opt/flink/conf/sql-client-conf.yaml
+      - ./flink.sql:/flink.sql
+
+  pyflink:
+    build: ./pyflink
+    restart: always
+    depends_on:
+      - broker
+      - jobmanager
+      - zookeeper
+    volumes:
+      - ./pyflink:/pyflink
+      - ./flink-sql-client/conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
 
   postgres:
     image: postgres:14-alpine
@@ -149,6 +163,23 @@ services:
       - "-c"
       - "wal_level=logical"
 
+  postgres-data-gen:
+    image: postgres:14-alpine
+    restart: always
+    depends_on:
+      - broker
+      - postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
+    working_dir: /work
+    volumes:
+      - .:/work
+    command:
+      - "sh"
+      - "data-gen.sh"
+
   create-connector:
     image: curlimages/curl
     restart: always
@@ -161,3 +192,26 @@ services:
     command:
       - "sh"
       - "create-connector.sh"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.0
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.6.0
+    ports:
+      - "5601:5601"

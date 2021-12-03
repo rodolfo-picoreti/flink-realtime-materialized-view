@@ -15,3 +15,20 @@
 ################################################################################
 
 jobmanager.rpc.address: jobmanager
+
+restart-strategy: fixed-delay
+restart-strategy.fixed-delay.attempts: 100
+restart-strategy.fixed-delay.delay: 1 s
+
+# https://nightlies.apache.org/flink/flink-docs-release-1.13/docs/deployment/config/#checkpoints-and-state-backends
+
+# state.backend: rocksdb
+# state.checkpoint-storage: filesystem
+# state.checkpoints.dir: file:///checkpoints
+# state.savepoints.dir: file:///savepoints
+# execution.checkpointing.interval: 30 s
+# execution.checkpointing.timeout: 10 min
+# execution.checkpointing.unaligned: true
+# execution.checkpointing.mode: EXACTLY_ONCEblob.server.port: 6124
+query.server.port: 6125
+taskmanager.numberOfTaskSlots: 1
